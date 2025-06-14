@@ -1,0 +1,704 @@
+<!DOCTYPE html>
+<!--
+===================================================================================
+项目设计决策 (Project Style Decisions) - V2.5 (社交图标交互升级)
+===================================================================================
+为了确保后续开发的一致性，特此记录已确认的核心设计决策。
+我将严格遵守此备忘录。
+
+1.  **主题系统 (Theming System):**
+    * 提供至少三种主题：默认(科技红)、赛博朋克(霓虹蓝)、浅色(极简白)。
+    * 通过右下角悬浮按钮进行切换。
+    * 用户的选择将被本地存储，下次访问时保持不变。
+
+2.  **主色调 (Primary Color):** 默认为 #FE3B5C，并随主题变化。
+
+3.  **背景动画 (Background Animation):** 采用您最终确认的“第一版”密集点线网络效果 (80个粒子，带有连接线)。
+
+4.  **核心交互 (Core Interactions):**
+    * 全局鼠标辉光跟随效果 (Cursor Glow)。
+    * AI作品卡片采用3D倾斜悬停效果 (3D Tilt)。
+    * 【升级】“关于我”板块，微信、小红书、知识星球图标均采用图片，并触发独立的二维码模态框。
+
+5.  **内容管理 (Content Management):**
+    * 网站内容与代码分离。
+    * 所有可变内容均通过<script>标签内的JavaScript数据数组进行管理。
+
+6.  **排版规范 (Typography Scale):**
+    * H1: text-5xl -> text-7xl
+    * H2: text-4xl -> text-5xl
+    * H3: text-2xl -> text-3xl
+    * 正文: text-lg
+    * 辅助文字: text-base/sm
+
+7.  **间距系统 (Spacing System):** 遵循Tailwind CSS默认的4px网格系统。
+
+8.  **图片处理 (Image Handling):**
+    * 长宽比: 所有缩略图统一采用16:9或4:3的比例。
+    * 【升级】社交图标使用图片代替SVG，并使用占位符。
+
+9.  **链接行为 (Link Behavior):**
+    * 内部链接: 平滑滚动。
+    * 外部链接: 新标签页打开。
+===================================================================================
+-->
+<html lang="zh-CN" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>个人IP主页 - 原型 (V21 - 社交图标交互升级)</title>
+    
+    <!-- 引入外部资源 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/particles.js@2.0.0/particles.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/vanilla-tilt/1.7.2/vanilla-tilt.min.js"></script>
+    
+    <!-- 主样式表 -->
+    <style>
+        /* 默认主题 (科技红) */
+        :root {
+            --primary-color: #FE3B5C;
+            --primary-bg: #121212;
+            --secondary-bg: #242424;
+            --text-heading: #F5F5F5;
+            --text-body: #A3A3A3;
+            --glow-color: rgba(254, 59, 92, 0.15);
+            --particle-color: "#A3A3A3";
+        }
+        
+        /* 赛博朋克主题 */
+        [data-theme="cyberpunk"] {
+            --primary-color: #00BFFF; /* DeepSkyBlue */
+            --primary-bg: #0A0A1A;
+            --secondary-bg: #1A1A3A;
+            --text-heading: #E0FFFF; /* LightCyan */
+            --text-body: #87CEEB; /* SkyBlue */
+            --glow-color: rgba(0, 191, 255, 0.15);
+            --particle-color: "#87CEEB";
+        }
+
+        /* 浅色主题 */
+        [data-theme="light"] {
+            --primary-color: #007BFF; /* Bright Blue */
+            --primary-bg: #F5F7FA;
+            --secondary-bg: #FFFFFF;
+            --text-heading: #1a202c;
+            --text-body: #4a5568;
+            --glow-color: rgba(0, 123, 255, 0.15);
+            --particle-color: "#4a5568";
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--primary-bg);
+            color: var(--text-body);
+            overflow-x: hidden;
+            transition: background-color 0.5s ease, color 0.5s ease;
+        }
+        body.overflow-hidden { overflow: hidden; }
+        #cursor-glow {
+            position: fixed;
+            left: 0; top: 0;
+            width: 500px; height: 500px;
+            border-radius: 50%;
+            background: radial-gradient(circle, var(--glow-color) 0%, rgba(254, 59, 92, 0) 60%);
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            transition: background 0.5s ease, width 0.3s ease, height 0.3s ease;
+            z-index: 9999;
+        }
+        .portfolio-card {
+            background-color: var(--secondary-bg);
+            transition: background-color 0.5s ease;
+        }
+        .portfolio-card, .blog-card {
+            transform-style: preserve-3d;
+            transform: perspective(1000px);
+        }
+        .blog-card {
+            transition: background-color 0.5s ease;
+        }
+        .portfolio-card:hover .glow-border { opacity: 1; }
+        .glow-border {
+             box-shadow: 0 0 20px 5px var(--primary-color), inset 0 0 10px 2px var(--primary-color);
+             transition: box-shadow 0.5s ease;
+        }
+        .scroll-reveal {
+            opacity: 0;
+            transform: translateY(30px);
+            transition: opacity 0.8s ease-out, transform 0.8s ease-out;
+        }
+        .scroll-reveal.visible { opacity: 1; transform: translateY(0); }
+        h1, h2, h3, h4 { color: var(--text-heading); transition: color 0.5s ease;}
+        #particles-js {
+            position: absolute;
+            width: 100%; height: 100%;
+            top: 0; left: 0;
+            z-index: 0;
+        }
+        .modal, #mobile-menu, #detail-page-container { transition: opacity 0.4s ease-in-out; }
+        .page-transition { transition: opacity 0.4s ease-in-out; }
+
+        .custom-form-input, .download-item, .tool-card {
+            background-color: var(--secondary-bg);
+            transition: all 0.5s ease;
+        }
+        .custom-form-input {
+            border: 1px solid #4a4a4a;
+            color: var(--text-heading);
+        }
+        .custom-form-input:focus {
+            border-color: var(--primary-color);
+            outline: none;
+            box-shadow: 0 0 0 2px var(--glow-color);
+        }
+        .primary-button {
+            background-color: var(--primary-color);
+            transition: all 0.3s;
+            transform: scale(1);
+        }
+        .primary-button:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 20px var(--glow-color);
+        }
+        .detail-content h4, .detail-content p, .detail-content code, .detail-content pre, .detail-content ul li {
+            transition: all 0.5s ease;
+        }
+        .detail-content code {
+            background-color: var(--secondary-bg);
+            color: var(--primary-color);
+        }
+        .detail-content pre {
+            background-color: var(--secondary-bg);
+        }
+        .social-icon {
+            opacity: 0.7;
+            transition: opacity 0.3s ease, transform 0.3s ease;
+        }
+        .social-icon:hover {
+            opacity: 1;
+            transform: scale(1.1);
+        }
+    </style>
+</head>
+<body class="antialiased">
+
+    <!-- 光标跟随辉光 -->
+    <div id="cursor-glow"></div>
+
+    <!-- 头部导航栏 -->
+    <header id="navbar" class="fixed top-0 left-0 right-0 z-50 transition-all duration-300">
+        <div class="container mx-auto px-6 py-4 flex justify-between items-center">
+            <a href="#" class="text-2xl font-bold z-50" style="color: var(--text-heading);">溪云<span style="color: var(--primary-color);">AI</span></a>
+            <nav class="hidden md:flex items-center space-x-8 relative">
+                <a href="#hero" class="nav-link hover:text-white transition-colors">首页</a>
+                <a href="#portfolio" class="nav-link hover:text-white transition-colors">AI作品</a>
+                <a href="#tools" class="nav-link hover:text-white transition-colors">AI工具</a>
+                <a href="#blog" class="nav-link hover:text-white transition-colors">最新资讯</a>
+                <a href="#downloads" class="nav-link hover:text-white transition-colors">资源下载</a>
+                <a href="#ideas" class="nav-link hover:text-white transition-colors">创意搜集</a>
+                <a href="#about" class="nav-link hover:text-white transition-colors">关于我</a>
+                <div id="nav-indicator" class="absolute bottom-[-10px] h-1 rounded-full transition-all duration-500" style="background-color: var(--primary-color);"></div>
+            </nav>
+            <button id="mobile-menu-button" class="md:hidden text-white z-50">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7" /></svg>
+            </button>
+        </div>
+    </header>
+
+    <!-- 移动端弹出菜单 -->
+    <div id="mobile-menu" class="hidden fixed inset-0 z-40 flex flex-col items-center justify-center space-y-6" style="background-color: rgba(18, 18, 18, 0.98); backdrop-filter: blur(10px);">
+        <a href="#hero" class="mobile-nav-link text-3xl font-bold">首页</a>
+        <a href="#portfolio" class="mobile-nav-link text-3xl font-bold">AI作品</a>
+        <a href="#tools" class="mobile-nav-link text-3xl font-bold">AI工具</a>
+        <a href="#blog" class="mobile-nav-link text-3xl font-bold">最新资讯</a>
+        <a href="#downloads" class="mobile-nav-link text-3xl font-bold">资源下载</a>
+        <a href="#ideas" class="mobile-nav-link text-3xl font-bold">创意搜集</a>
+        <a href="#about" class="mobile-nav-link text-3xl font-bold">关于我</a>
+    </div>
+
+    <!-- 模态框容器 -->
+    <div id="modal-container">
+        <!-- 反馈提示模态框 -->
+        <div id="feedback-modal" class="modal hidden fixed inset-0 z-[70] items-center justify-center bg-black bg-opacity-70">
+            <div class="p-8 rounded-lg text-center" style="background-color: var(--secondary-bg);">
+                <h3 class="text-2xl font-bold mb-4">感谢您的提交！</h3>
+                <p>您的创意已收到，期待它开花结果。</p>
+                <button id="close-feedback-modal" class="primary-button text-white font-bold py-2 px-6 rounded-lg mt-6">关闭</button>
+            </div>
+        </div>
+        
+        <!-- 微信二维码模态框 -->
+        <div id="wechat-modal" class="modal hidden fixed inset-0 z-[70] items-center justify-center bg-black bg-opacity-80 opacity-0 backdrop-blur-sm">
+            <div class="modal-content p-8 rounded-2xl text-center relative max-w-xs w-full transform scale-95 transition-all duration-300" style="background-color: var(--secondary-bg);">
+                <button class="close-modal-btn absolute top-4 right-4 text-[var(--text-body)] hover:text-white transition-colors">
+                    <i data-lucide="x" class="w-6 h-6"></i>
+                </button>
+                <h3 class="text-xl font-bold mb-4" style="color: var(--text-heading);">与我微信联系</h3>
+                <img src="https://placehold.co/250x250/ffffff/000000?text=微信二维码" alt="微信二维码" class="mx-auto rounded-lg w-full">
+                <p class="mt-4 text-[var(--text-body)]">扫一扫，加我好友</p>
+            </div>
+        </div>
+
+        <!-- 小红书二维码模态框 -->
+        <div id="xhs-modal" class="modal hidden fixed inset-0 z-[70] items-center justify-center bg-black bg-opacity-80 opacity-0 backdrop-blur-sm">
+            <div class="modal-content p-8 rounded-2xl text-center relative max-w-xs w-full transform scale-95 transition-all duration-300" style="background-color: var(--secondary-bg);">
+                <button class="close-modal-btn absolute top-4 right-4 text-[var(--text-body)] hover:text-white transition-colors">
+                    <i data-lucide="x" class="w-6 h-6"></i>
+                </button>
+                <h3 class="text-xl font-bold mb-4" style="color: var(--text-heading);">关注我的小红书</h3>
+                <img src="https://placehold.co/250x250/ffffff/000000?text=小红书二维码" alt="小红书二维码" class="mx-auto rounded-lg w-full">
+                <p class="mt-4 text-[var(--text-body)]">扫一扫，发现更多精彩</p>
+            </div>
+        </div>
+
+        <!-- 知识星球二维码模态框 -->
+        <div id="zsxq-modal" class="modal hidden fixed inset-0 z-[70] items-center justify-center bg-black bg-opacity-80 opacity-0 backdrop-blur-sm">
+            <div class="modal-content p-8 rounded-2xl text-center relative max-w-xs w-full transform scale-95 transition-all duration-300" style="background-color: var(--secondary-bg);">
+                <button class="close-modal-btn absolute top-4 right-4 text-[var(--text-body)] hover:text-white transition-colors">
+                    <i data-lucide="x" class="w-6 h-6"></i>
+                </button>
+                <h3 class="text-xl font-bold mb-4" style="color: var(--text-heading);">加入我的知识星球</h3>
+                <img src="https://placehold.co/250x250/ffffff/000000?text=知识星球二维码" alt="知识星球二维码" class="mx-auto rounded-lg w-full">
+                <p class="mt-4 text-[var(--text-body)]">扫一扫，开启AI之旅</p>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- 通用详情页容器 -->
+    <div id="detail-page-container" class="fixed inset-0 z-[60] hidden opacity-0 bg-[var(--primary-bg)] overflow-y-auto page-transition">
+        <!-- 详情内容将由JS动态注入 -->
+    </div>
+
+
+    <main id="main-content" class="page-transition">
+        <!-- Hero Section -->
+        <section id="hero" class="relative min-h-screen flex items-center justify-center text-center overflow-hidden">
+            <div id="particles-js"></div>
+            <div class="relative z-10 px-4">
+                <h1 class="text-5xl md:text-7xl font-black mb-4 animate-fade-in-up">用代码探索<span style="color: var(--primary-color);">智能</span>边界</h1>
+                <p class="text-lg md:text-xl max-w-3xl mx-auto mb-8 animate-fade-in-up" style="opacity: 0; animation-delay: 0.2s;">你好，我是[你的名字]。一位热衷于构建未来AI应用的开发者。</p>
+                <a href="#portfolio" class="primary-button inline-block text-white font-bold py-3 px-8 rounded-lg animate-fade-in-up" style="opacity: 0; animation-delay: 0.4s;">查看我的作品</a>
+            </div>
+            <style>@keyframes fadeInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } } .animate-fade-in-up { opacity: 0; animation: fadeInUp 1s ease-out forwards; }</style>
+        </section>
+
+        <!-- Sections: Portfolio, Tools, Blog, Downloads, Ideas... -->
+        <section id="portfolio" class="py-20 md:py-32"><div class="container mx-auto px-6"><div class="text-center mb-16 scroll-reveal"><h2 class="text-4xl md:text-5xl font-bold">AI编程作品</h2><p class="mt-4 max-w-2xl mx-auto">从概念到代码，这里是我将想法变为现实的地方。</p></div><div id="portfolio-grid" class="grid md:grid-cols-2 lg:grid-cols-3 gap-10"></div></div></section>
+        <section id="tools" class="py-20 md:py-32" style="background-color: var(--secondary-bg);"><div class="container mx-auto px-6"><div class="text-center mb-16 scroll-reveal"><h2 class="text-4xl md:text-5xl font-bold">AI工具分享</h2><p class="mt-4 max-w-2xl mx-auto">工欲善其事，必先利其器。这些是我常用的提效工具。</p></div><div id="tools-list" class="grid md:grid-cols-2 lg:grid-cols-4 gap-8"></div></div></section>
+        <section id="blog" class="py-20 md:py-32"><div class="container mx-auto px-6"><div class="text-center mb-16 scroll-reveal"><h2 class="text-4xl md:text-5xl font-bold">AI前沿资讯 & 阅读笔记</h2><p class="mt-4 max-w-2xl mx-auto">记录我的思考，分享最新的行业动态。</p></div><div id="blog-list" class="space-y-12"></div></div></section>
+        <section id="downloads" class="py-20 md:py-32" style="background-color: var(--secondary-bg);"><div class="container mx-auto px-6"><div class="text-center mb-16 scroll-reveal"><h2 class="text-4xl md:text-5xl font-bold">资源下载</h2><p class="mt-4 max-w-2xl mx-auto">一些我整理的、有价值的学习资料和模板。</p></div><div id="downloads-list" class="max-w-4xl mx-auto space-y-4"></div></div></section>
+        <section id="ideas" class="py-20 md:py-32"><div class="container mx-auto px-6"><div class="text-center mb-16 scroll-reveal"><h2 class="text-4xl md:text-5xl font-bold">需要一个AI帮手？</h2><p class="mt-4 max-w-2xl mx-auto">如果你有什么有趣的想法或待解决的难题需要AI的帮助，请告诉我。也许你的创意，就是我的下一个作品。</p></div><form id="ideas-form" class="max-w-2xl mx-auto scroll-reveal"><textarea id="idea-input" class="custom-form-input w-full p-4 rounded-lg text-lg" rows="6" placeholder="在这里描述你的创意或需求..."></textarea><button type="submit" class="primary-button w-full text-white font-bold py-3 px-8 rounded-lg mt-6 text-lg">提交我的创意</button></form></div></section>
+
+
+        <!-- 关于我 Section -->
+        <section id="about" class="py-20 md:py-32" style="background-color: var(--secondary-bg);">
+            <div class="container mx-auto px-6 grid md:grid-cols-5 gap-16 items-center">
+                <div class="md:col-span-2 scroll-reveal">
+                    <img src="./images/me.jpg" alt="你的照片" class="rounded-full mx-auto w-64 h-64 md:w-80 md:h-80 object-cover shadow-2xl" style="box-shadow: 0 0 30px var(--glow-color);">
+                </div>
+                <div class="md:col-span-3 scroll-reveal">
+                    <h2 class="text-4xl md:text-5xl font-bold">关于我</h2>
+                    <p class="mt-6 text-lg">我是一名AI开发者和终身学习者，对利用技术解决复杂问题充满热情。我的专业领域包括自然语言处理和生成式AI。我坚信，最好的学习方式就是动手创造。</p>
+                    <p class="mt-4 text-lg">业余时间，我喜欢阅读科幻小说、探索最新的AI研究论文，并为开源社区做出贡献。</p>
+
+                    <!-- 与我连接 -->
+                    <div class="mt-10 pt-8 border-t border-white/10">
+                        <h3 class="text-xl font-bold text-center mb-6" style="color: var(--text-heading);">与我连接 | Social Matrix</h3>
+                        
+                        <!-- 主要CTA: 知识星球 -->
+                        <a href="https://t.zsxq.com/8JhD5" target="_blank" class="primary-button w-full flex items-center justify-center text-white font-bold py-4 px-8 rounded-lg text-lg mb-6 transition-transform hover:scale-105">
+                            <i data-lucide="rocket" class="mr-3"></i>
+                            加入我的知识星球
+                        </a>
+
+                        <!-- 次要链接 -->
+                        <div class="flex justify-center items-center space-x-6">
+                            <!-- WeChat Button -->
+                            <button id="wechat-button" title="联系微信" class="social-icon">
+                                <!-- 请将 'src' 替换为您的本地图片路径, e.g., './images/wechat.png' -->
+                                <img src="https://placehold.co/28x28/A3A3A3/FFFFFF?text=W" alt="微信" class="w-7 h-7 rounded">
+                            </button>
+                            <!-- GitHub Link -->
+                            <a href="#" target="_blank" title="GitHub" class="social-icon">
+                                 <!-- 请将 'src' 替换为您的本地图片路径, e.g., './images/github.png' -->
+                                <img src="https://placehold.co/28x28/A3A3A3/FFFFFF?text=G" alt="GitHub" class="w-7 h-7 rounded">
+                            </a>
+                            <!-- 小红书 Button -->
+                            <button id="xhs-button" title="小红书" class="social-icon">
+                                 <!-- 请将 'src' 替换为您的本地图片路径, e.g., './images/xhs-icon.png' -->
+                                <img src="https://placehold.co/28x28/A3A3A3/FFFFFF?text=X" alt="小红书" class="w-7 h-7 rounded">
+                            </button>
+                            <!-- 知识星球 Button -->
+                            <button id="zsxq-button" title="知识星球" class="social-icon">
+                               <!-- 请将 'src' 替换为您的本地图片路径, e.g., './images/zsxq-icon.png' -->
+                               <img src="https://placehold.co/28x28/A3A3A3/FFFFFF?text=Z" alt="知识星球" class="w-7 h-7 rounded">
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+    
+    <!-- 主题切换按钮 -->
+    <button id="theme-switcher" class="primary-button fixed bottom-8 right-8 w-14 h-14 rounded-full flex items-center justify-center shadow-lg z-50">
+        <i data-lucide="palette" class="text-white"></i>
+    </button>
+    
+    <!-- 页脚 -->
+    <footer id="contact" class="py-12"><div class="container mx-auto px-6 text-center"><p>&copy; 2025 [你的名字]. All Rights Reserved.</p><p class="mt-2">保持联系，创造下一个可能。</p></div></footer>
+
+    <!-- 主脚本 -->
+    <script type="module">
+        // ===================================================================================
+        // 1. 数据中心 (Data Hub)
+        // ===================================================================================
+        const portfolioData = [
+            { id: "p1", title: "小红书封面设计", description: "无需下载,无需安装,纯本地运行,一站式解决小红书封面设计,文字/背景/主题可选可任意编辑。", imageUrl: "./images/xhs.png", tags: ["小红书封面设计"], videoUrl: "./vedios/xhs.mp4", repoUrl: "https://erichong85.github.io/codesign/", liveDemoUrl: "https://www.xiaohongshu.com/explore/6849a65d000000002100d492?xsec_token=ABsZyINxO9z3QZit2BjTV_-zDuBXpKTSco2lorxiKTPpk=&xsec_source=pc_user", detailedDescription: `<h4>项目背景</h4><p>这是我花时间最多,投入精力最多的一个系统,也是目前收到反馈最多的作品,我会继续更新迭代,为更多的朋友创造价值!</p><h4>技术实现</h4><p>纯前端,无后端交互</p>`},
+            { id: "p2", title: "亿邹美育绘馆", description: "帮网友完成心愿，带零编程基础的她帮她朋友机构做的宣传页。", imageUrl: "./images/yzmyg.png", tags: ["亿邹美育绘馆"], videoUrl: "./vedios/yzmyg.mp4", repoUrl: "https://erichong85.github.io/yizhou-edu-gallery/", liveDemoUrl: "https://www.xiaohongshu.com/explore/684273ec0000000021018953?xsec_token=AB6TIPWauWWz1jU9xUQgGD3QX0K8y-0DeUTzBvPzl6ebc=&xsec_source=pc_user", detailedDescription: `<h4>项目简介</h4><p>这是一个美育绘馆的宣传网页，是我和何喝喝，江叉叉的第一个从设计，编码，部署上线全流程跑通的项目，值得纪念！。</p>`},
+            { id: "p3", title: "3D词云课堂点名", description: "3D词云效果，课堂随机点名系统。", imageUrl: "./images/dmxt.png", tags: ["课堂随机点名系统"], videoUrl: "./vedios/dmxt.mp4", repoUrl: "https://erichong85.github.io/Random-Name-Picker/", liveDemoUrl: "https://www.xiaohongshu.com/explore/682be7120000000021008ef1?xsec_token=ABID6hCbw34hfexvzn8MF3VozzvgcjyCuJYURNjRdLYoo=&xsec_source=pc_user", detailedDescription: `<h4>项目简介</h4><p>3D词云，彩色渐变，自主上传名单后，可任意调整名字旋转方向，启动点名后名字加速旋转，最后高亮显示选中的学生名单！</p>`}
+        ];
+        const toolsData = [ { name: "VS Code", description: "代码编辑器", icon: "code" }, { name: "Figma", description: "UI设计工具", icon: "figma" }, { name: "Obsidian", description: "知识管理", icon: "book-marked" }, { name: "GitHub Copilot", description: "AI编程助手", icon: "github" }];
+        const blogData = [
+            { id: "b1", title: "大型语言模型（LLM）的最新进展", date: "2025年6月10日", category: "AI前沿", summary: "本文探讨了近期大型语言模型在多模态能力和推理方面的突破，并分析了其对未来AI应用开发的潜在影响...", imageUrl: "https://placehold.co/800x450/242424/F5F5F5?text=Blog+Image+1", detailedContent: `<h4>引言</h4><p>在过去的几个月里，大型语言模型（LLM）领域见证了前所未有的快速迭代。以GPT-4o和谷歌的Gemini系列为代表的新一代模型，不仅在传统的文本生成和理解任务上达到了新的高度，更在多模态交互能力上取得了革命性突破。本文将梳理这些关键进展，并探讨其背后的技术驱动力。</p><h4>核心进展一：原生多模态能力</h4><p>与以往通过“拼接”不同模型来处理不同类型数据的方式不同，GPT-4o等新模型是“原生多模态”的。这意味着它们在单一神经网络中统一处理文本、音频和视觉信息。这种架构带来了显著的优势：</p><ul><li><b>极低的延迟：</b> 音频输入的响应时间可以缩短到数百毫秒，接近人类的反应速度，使得流畅、自然的语音对话成为可能。</li><li><b>情感和语调的理解：</b> 模型能够捕捉并回应人类语言中的情感细微差别，例如笑声、停顿和语调变化，从而提供更具同理心和人情味的交互。</li></ul><h4>核心进展二：端侧模型的崛起</h4><p>除了云端的大型模型外，能够在移动设备上高效运行的端侧模型（On-device Models）也成为一大亮点。谷歌的Gemini Nano和苹果正在研发的设备端模型，能够在不联网的情况下执行任务，这不仅保护了用户隐私，也为实现更快速、更个性化的AI体验铺平了道路。</p><pre><code>// 示例：在端侧运行模型的伪代码\nconst model = await onDeviceModel.load('model-name');\nconst input = '用中文写一首关于夏天的诗';\nconst result = await model.generate(input);\nconsole.log(result);</code></pre><h4>结论与展望</h4><p>LLM的最新进展预示着一个AI将更深度融入我们日常生活的未来。从更自然的语音助手到能够实时分析周围世界的视觉应用，这些技术将持续催生新的产品和服务形态。作为开发者，紧跟这些技术趋势，并思考如何将其应用于解决实际问题，将是未来几年内的核心课题。</p>`},
+            { id: "b2", title: "阅读笔记：《Superintelligence》", date: "2025年5月28日", category: "阅读笔记", summary: "对Nick Bostrom关于超级智能路径、危险和策略的经典著作的深入思考。核心观点是控制问题（Control Problem）的复杂性...", imageUrl: "https://placehold.co/800x450/242424/F5F5F5?text=Blog+Image+2", detailedContent: `<h4>核心观点：控制问题</h4><p>Nick Bostrom 在《超级智能》中提出的核心论点是，一旦我们创造出超越人类智能的通用人工智能（AGI），我们可能无法控制它，这可能会给人类带来生存风险。这个所谓的“控制问题”（The Control Problem）是全书的重点。</p><p>他认为，一个超级智能体为了实现其设定的任何最终目标（即使是像“制造尽可能多的回形针”这样看似无害的目标），都会衍生出几乎相同的工具性目标，例如自我保护、资源获取和技术提升。这些工具性目标可能会与人类的生存和福祉发生冲突。</p>`}
+        ];
+        const downloadsData = [ { name: "LLM入门学习路线图.pdf", description: "为初学者整理的大语言模型学习路径和资源汇总。", fileSize: "3.2 MB", url: "#" }, { name: "Prompt Engineering最佳实践.docx", description: "一份包含上百个高质量提示词范例的实用指南。", fileSize: "1.5 MB", url: "#" }, { name: "AI项目提案模板.pptx", description: "一个通用的AI项目立项提案PPT模板，帮助你清晰地展示想法。", fileSize: "5.8 MB", url: "#" }];
+
+        // ===================================================================================
+        // 2. 应用程序 (App)
+        // ===================================================================================
+        function App() {
+            const elements = {
+                mainContent: document.getElementById('main-content'),
+                detailPageContainer: document.getElementById('detail-page-container'),
+                portfolioGrid: document.getElementById('portfolio-grid'),
+                toolsList: document.getElementById('tools-list'),
+                blogList: document.getElementById('blog-list'),
+                downloadsList: document.getElementById('downloads-list'),
+                navbar: document.getElementById('navbar'),
+                navLinks: document.querySelectorAll('.nav-link'),
+                navIndicator: document.getElementById('nav-indicator'),
+                mobileMenuButton: document.getElementById('mobile-menu-button'),
+                mobileMenu: document.getElementById('mobile-menu'),
+                mobileNavLinks: document.querySelectorAll('.mobile-nav-link'),
+                ideasForm: document.getElementById('ideas-form'),
+                ideaInput: document.getElementById('idea-input'),
+                cursorGlow: document.getElementById('cursor-glow'),
+                themeSwitcher: document.getElementById('theme-switcher'),
+                // Modal elements
+                feedbackModal: document.getElementById('feedback-modal'),
+                closeFeedbackModal: document.getElementById('close-feedback-modal'),
+                wechatModal: document.getElementById('wechat-modal'),
+                wechatButton: document.getElementById('wechat-button'),
+                xhsModal: document.getElementById('xhs-modal'),
+                xhsButton: document.getElementById('xhs-button'),
+                zsxqModal: document.getElementById('zsxq-modal'),
+                zsxqButton: document.getElementById('zsxq-button'),
+            };
+
+            // ---- 渲染函数 ----
+            function renderPortfolio() {
+                portfolioData.forEach(item => {
+                    const tagsHtml = item.tags.map(tag => { const isPrimary = ['生成式AI', 'NLP', '计算机视觉'].includes(tag); return `<span class="text-xs font-semibold py-1 px-3 rounded-full ${isPrimary ? 'text-[var(--primary-color)] bg-[rgba(254,59,92,0.2)]' : 'bg-gray-700 text-gray-300'}">${tag}</span>`; }).join('');
+                    elements.portfolioGrid.innerHTML += `
+                        <div class="portfolio-card flex flex-col p-6 rounded-xl transition-transform duration-300 cursor-pointer border border-transparent hover:border-gray-800 scroll-reveal" data-id="${item.id}">
+                            <div class="relative" style="transform: translateZ(20px);">
+                                <img src="${item.imageUrl}" alt="${item.title}" class="rounded-lg w-full h-auto aspect-video object-cover" onerror="this.onerror=null;this.src='https://placehold.co/600x338?text=Image+Not+Found';">
+                                <div class="glow-border absolute -inset-2 rounded-lg opacity-0 transition-opacity duration-300"></div>
+                            </div>
+                            <div class="flex flex-col flex-grow mt-6">
+                                <h3 class="text-2xl font-bold" style="transform: translateZ(30px);">${item.title}</h3>
+                                <p class="mt-2 leading-relaxed tracking-wide flex-grow" style="transform: translateZ(25px);">${item.description}</p>
+                                <div class="mt-4 flex flex-wrap gap-2" style="transform: translateZ(20px);">${tagsHtml}</div>
+                            </div>
+                        </div>`;
+                });
+            }
+
+            function renderTools() {
+                toolsData.forEach(tool => {
+                    elements.toolsList.innerHTML += `<div class="tool-card p-6 rounded-lg text-center transition-all duration-300 hover:-translate-y-2 hover:bg-gray-800/50 scroll-reveal"><div class="flex items-center justify-center h-16 w-16 rounded-full mx-auto mb-4" style="background-color: var(--primary-bg);"><i data-lucide="${tool.icon}" class="text-white"></i></div><h3 class="font-bold text-lg">${tool.name}</h3><p class="text-sm">${tool.description}</p></div>`;
+                });
+            }
+
+            function renderBlog() {
+                blogData.forEach(post => {
+                    elements.blogList.innerHTML += `
+                    <div class="scroll-reveal grid md:grid-cols-3 gap-8 items-center blog-card cursor-pointer group" data-id="${post.id}">
+                        <div class="md:col-span-1 overflow-hidden rounded-lg"><img src="${post.imageUrl}" alt="${post.title}" class="w-full h-auto aspect-video object-cover transition-transform duration-500 group-hover:scale-105"></div>
+                        <div class="md:col-span-2">
+                            <p class="text-sm mb-2"><span class="font-semibold" style="color: var(--primary-color);">${post.category}</span><span class="mx-2">·</span><span>${post.date}</span></p>
+                            <h3 class="text-3xl font-bold mb-3 group-hover:text-[var(--primary-color)] transition-colors">${post.title}</h3>
+                            <p>${post.summary}</p>
+                        </div>
+                    </div>`;
+                });
+            }
+
+            function renderDownloads() {
+                downloadsData.forEach(file => {
+                    elements.downloadsList.innerHTML += `<div class="download-item scroll-reveal flex items-center justify-between p-4 rounded-lg"><div class="flex items-center"><i data-lucide="file-text" class="mr-4" style="color: var(--primary-color);"></i><div><h4 class="font-bold text-white">${file.name}</h4><p class="text-sm">${file.description}</p></div></div><div class="text-right"><p class="text-sm font-mono">${file.fileSize}</p><a href="${file.url}" target="_blank" class="text-sm font-bold" style="color: var(--primary-color);">下载</a></div></div>`;
+                });
+            }
+
+            function renderAll() {
+                renderPortfolio();
+                renderTools();
+                renderBlog();
+                renderDownloads();
+            }
+            
+            // ---- UI逻辑与交互 ----
+            function openDetailPage(htmlContent) {
+                if (!htmlContent) return;
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+                elements.detailPageContainer.innerHTML = htmlContent;
+                lucide.createIcons();
+                document.getElementById('back-to-main').addEventListener('click', closeDetailPage);
+
+                elements.mainContent.classList.add('opacity-0', 'pointer-events-none');
+                document.body.classList.add('overflow-hidden');
+                elements.detailPageContainer.classList.remove('hidden');
+                setTimeout(() => elements.detailPageContainer.classList.remove('opacity-0'), 10);
+            }
+
+            function closeDetailPage() {
+                elements.detailPageContainer.classList.add('opacity-0');
+                elements.mainContent.classList.remove('opacity-0', 'pointer-events-none');
+                document.body.classList.remove('overflow-hidden');
+                setTimeout(() => {
+                    elements.detailPageContainer.classList.add('hidden');
+                    elements.detailPageContainer.innerHTML = '';
+                }, 400);
+            }
+            
+            function buildPortfolioDetailHTML(itemId) {
+                const item = portfolioData.find(p => p.id === itemId);
+                if (!item) return '';
+                const videoEmbed = item.videoUrl ? `<div class="aspect-video w-full rounded-lg overflow-hidden" style="background-color: var(--secondary-bg);"><iframe src="${item.videoUrl}" scrolling="no" border="0" frameborder="no" framespacing="0" allowfullscreen="true" class="w-full h-full"></iframe></div>` : `<img src="${item.imageUrl}" alt="${item.title}" class="w-full h-auto rounded-lg aspect-video object-cover">`;
+                const repoButton = item.repoUrl ? `<a href="${item.repoUrl}" target="_blank" class="primary-button flex-1 text-white font-bold py-3 px-8 rounded-lg text-center flex items-center justify-center gap-2"><i data-lucide="github"></i><span>查看源码</span></a>` : '';
+                const demoButton = item.liveDemoUrl ? `<a href="${item.liveDemoUrl}" target="_blank" class="flex-1 text-white font-bold py-3 px-8 rounded-lg text-center flex items-center justify-center gap-2" style="background-color: var(--secondary-bg);"><i data-lucide="external-link"></i><span>在线演示</span></a>` : '';
+                
+                return `<div class="container mx-auto px-6 py-20 md:py-32"><button id="back-to-main" class="flex items-center gap-2 mb-8 font-bold hover:text-white transition-colors"><i data-lucide="arrow-left"></i>返回</button><h1 class="text-5xl md:text-7xl font-black mb-4">${item.title}</h1><div class="flex flex-wrap gap-2 mb-12">${item.tags.map(tag => `<span class="text-xs font-semibold py-1 px-3 rounded-full bg-gray-700 text-gray-300">${tag}</span>`).join('')}</div>${videoEmbed}<div class="detail-content max-w-4xl mx-auto mt-12 text-lg text-left">${item.detailedDescription}</div><div class="flex flex-col md:flex-row gap-4 mt-12 max-w-4xl mx-auto">${repoButton}${demoButton}</div></div>`;
+            }
+
+            function buildBlogDetailHTML(blogId) {
+                const post = blogData.find(b => b.id === blogId);
+                if (!post) return '';
+
+                return `
+                    <div class="container mx-auto px-6 py-20 md:py-32">
+                        <button id="back-to-main" class="flex items-center gap-2 mb-8 font-bold hover:text-white transition-colors"><i data-lucide="arrow-left"></i>返回</button>
+                        <article class="max-w-4xl mx-auto">
+                            <p class="text-lg mb-4">
+                                <span class="font-bold" style="color: var(--primary-color);">${post.category}</span>
+                                <span class="mx-3">·</span>
+                                <span>${post.date}</span>
+                            </p>
+                            <h1 class="text-4xl md:text-6xl font-black mb-8">${post.title}</h1>
+                            <img src="${post.imageUrl}" alt="${post.title}" class="w-full h-auto rounded-lg aspect-video object-cover mb-12">
+                            <div class="detail-content text-lg">${post.detailedContent}</div>
+                        </article>
+                    </div>
+                `;
+            }
+
+            function handleNavIndicator() {
+                 function update() {
+                    const activeLink = document.querySelector('.nav-link.active');
+                    if (activeLink) {
+                        elements.navIndicator.style.width = `${activeLink.offsetWidth}px`;
+                        elements.navIndicator.style.left = `${activeLink.offsetLeft}px`;
+                    }
+                }
+                elements.navLinks.forEach(link => {
+                    link.addEventListener('click', function() {
+                        elements.navLinks.forEach(l => l.classList.remove('active', 'font-bold', 'text-white'));
+                        this.classList.add('active', 'font-bold', 'text-white');
+                        update();
+                    });
+                });
+                if (elements.navLinks.length > 0) {
+                    elements.navLinks[0].classList.add('active', 'font-bold', 'text-white');
+                    setTimeout(update, 100);
+                }
+                window.addEventListener('resize', update);
+            }
+            function handleMobileMenu() {
+                const toggle = () => {
+                    const isHidden = elements.mobileMenu.classList.contains('hidden');
+                    document.body.classList.toggle('overflow-hidden');
+                    if (isHidden) {
+                        elements.mobileMenu.classList.remove('hidden');
+                        setTimeout(() => elements.mobileMenu.style.opacity = '1', 10);
+                    } else {
+                        elements.mobileMenu.style.opacity = '0';
+                        setTimeout(() => elements.mobileMenu.classList.add('hidden'), 300);
+                    }
+                };
+                elements.mobileMenuButton.addEventListener('click', toggle);
+                elements.mobileNavLinks.forEach(link => link.addEventListener('click', toggle));
+            }
+            
+            function handleThemeSwitching() {
+                const themes = ['default', 'cyberpunk', 'light'];
+                let currentThemeIndex = 0;
+
+                const savedTheme = localStorage.getItem('theme');
+                if (savedTheme && themes.includes(savedTheme)) {
+                    currentThemeIndex = themes.indexOf(savedTheme);
+                }
+                
+                function applyTheme(themeName) {
+                    document.documentElement.setAttribute('data-theme', themeName);
+                    localStorage.setItem('theme', themeName);
+                    
+                    const rootStyle = getComputedStyle(document.documentElement);
+                    const newParticleColor = rootStyle.getPropertyValue('--particle-color').trim().replace(/"/g, '');
+
+                    if (window.pJSDom && window.pJSDom[0] && window.pJSDom[0].pJS) {
+                         window.pJSDom[0].pJS.particles.line_linked.color = newParticleColor;
+                         window.pJSDom[0].pJS.fn.particlesRefresh();
+                    }
+                }
+
+                elements.themeSwitcher.addEventListener('click', () => {
+                    currentThemeIndex = (currentThemeIndex + 1) % themes.length;
+                    applyTheme(themes[currentThemeIndex]);
+                });
+
+                applyTheme(themes[currentThemeIndex]);
+            }
+            
+            function initThirdPartyLibs() {
+                particlesJS('particles-js', {
+                    "particles": { "number": { "value": 80, "density": { "enable": true, "value_area": 800 } }, "color": { "value": "#ffffff" }, "shape": { "type": "circle" }, "opacity": { "value": 0.5, "random": true }, "size": { "value": 3, "random": true }, "line_linked": { "enable": true, "distance": 150, "color": "#A3A3A3", "opacity": 0.4, "width": 1 }, "move": { "enable": true, "speed": 1, "direction": "none", "random": false, "straight": false, "out_mode": "out", "bounce": false } },
+                    "interactivity": { "detect_on": "canvas", "events": { "onhover": { "enable": true, "mode": "grab" }, "onclick": { "enable": true, "mode": "push" }, "resize": true }, "modes": { "grab": { "distance": 140, "line_linked": { "opacity": 1 } }, "push": { "particles_nb": 4 } } },
+                    "retina_detect": true
+                });
+                VanillaTilt.init(document.querySelectorAll(".portfolio-card"), { max: 15, speed: 400, glare: true, "max-glare": 0.2 });
+            }
+            
+            function initEventHandlers() {
+                elements.portfolioGrid.addEventListener('click', e => {
+                    const card = e.target.closest('.portfolio-card');
+                    if (card) openDetailPage(buildPortfolioDetailHTML(card.dataset.id));
+                });
+
+                elements.blogList.addEventListener('click', e => {
+                    const card = e.target.closest('.blog-card');
+                    if (card) openDetailPage(buildBlogDetailHTML(card.dataset.id));
+                });
+
+                window.addEventListener('scroll', () => {
+                    if(elements.navbar) {
+                       window.scrollY > 50 ? elements.navbar.classList.add('bg-[var(--primary-bg)]/80', 'backdrop-blur-sm') : elements.navbar.classList.remove('bg-[var(--primary-bg)]/80', 'backdrop-blur-sm');
+                    }
+                });
+                
+                document.addEventListener('mousemove', e => {
+                    if(elements.cursorGlow) {
+                       elements.cursorGlow.style.left = e.clientX + 'px';
+                       elements.cursorGlow.style.top = e.clientY + 'px';
+                    }
+                });
+
+                if (elements.ideasForm) {
+                    elements.ideasForm.addEventListener('submit', e => {
+                        e.preventDefault();
+                        openModal(elements.feedbackModal);
+                        elements.ideaInput.value = '';
+                    });
+                }
+                
+                // Modal handling
+                const openModal = (modal) => {
+                    if (modal && modal.classList.contains('hidden')) {
+                        modal.classList.remove('hidden');
+                        const content = modal.querySelector('.modal-content');
+                        setTimeout(() => {
+                            modal.classList.remove('opacity-0');
+                            if(content) content.classList.remove('scale-95');
+                        }, 10);
+                    }
+                };
+
+                const closeModal = (modal) => {
+                    if (modal) {
+                       const content = modal.querySelector('.modal-content');
+                       modal.classList.add('opacity-0');
+                       if(content) content.classList.add('scale-95');
+                       setTimeout(() => modal.classList.add('hidden'), 300);
+                    }
+                };
+                
+                if (elements.closeFeedbackModal) {
+                    elements.closeFeedbackModal.addEventListener('click', () => closeModal(elements.feedbackModal));
+                }
+                
+                // Setup for all QR code modals
+                const modalTriggers = [
+                    { button: elements.wechatButton, modal: elements.wechatModal },
+                    { button: elements.xhsButton, modal: elements.xhsModal },
+                    { button: elements.zsxqButton, modal: elements.zsxqModal }
+                ];
+
+                modalTriggers.forEach(trigger => {
+                    if (trigger.button && trigger.modal) {
+                        trigger.button.addEventListener('click', () => openModal(trigger.modal));
+                        trigger.modal.addEventListener('click', (e) => {
+                            // Close if clicking on the backdrop
+                            if (e.target === trigger.modal) {
+                                closeModal(trigger.modal);
+                            }
+                        });
+                        // Add event listener for close button inside modal
+                        const closeBtn = trigger.modal.querySelector('.close-modal-btn');
+                        if (closeBtn) {
+                           closeBtn.addEventListener('click', () => closeModal(trigger.modal));
+                        }
+                    }
+                });
+            }
+
+            function initScrollAnimations() {
+                 const observer = new IntersectionObserver(entries => {
+                    entries.forEach(entry => {
+                        if (entry.isIntersecting) {
+                            entry.target.classList.add('visible');
+                            observer.unobserve(entry.target);
+                        }
+                    });
+                }, { threshold: 0.1 });
+                document.querySelectorAll('.scroll-reveal').forEach(el => observer.observe(el));
+            }
+            
+            // ---- 公开的初始化方法 ----
+            this.init = function() {
+                renderAll();
+                initThirdPartyLibs();
+                handleNavIndicator();
+                handleMobileMenu();
+                initEventHandlers();
+                initScrollAnimations();
+                handleThemeSwitching();
+                lucide.createIcons();
+            };
+        }
+
+        // 文档加载完毕后，启动应用程序
+        document.addEventListener('DOMContentLoaded', () => {
+            const app = new App();
+            app.init();
+        });
+
+    </script>
+</body>
+</html>
